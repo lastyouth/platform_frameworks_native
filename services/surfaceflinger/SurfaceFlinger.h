@@ -208,6 +208,8 @@ private:
     // called when screen is turning back on
     virtual void unblank(const sp<IBinder>& display);
     virtual status_t getDisplayInfo(const sp<IBinder>& display, DisplayInfo* info);
+    //sbh
+    virtual status_t setTargetActivityName(const char* name);
 
     /* ------------------------------------------------------------------------
      * DeathRecipient interface
@@ -472,6 +474,9 @@ private:
     bool mPrimaryHWVsyncEnabled;
     bool mHWVsyncAvailable;
 
+	//sbh
+	// target activity name for Layer distinguish
+	String8 mTargetActivityName;
     /* ------------------------------------------------------------------------
      * Feature prototyping
      */

@@ -227,6 +227,18 @@ public:
         memcpy(info, reply.readInplace(sizeof(DisplayInfo)), sizeof(DisplayInfo));
         return reply.readInt32();
     }
+    //sbh
+    virtual status_t setTargetActivityName(const char* activityName)
+    {
+		Parcel data,reply;
+		ALOGI("ISurfaceComposer.cpp - activityName : %s",activityName);
+		data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
+		data.writeCString(activityName);
+		ALOGI("ISurfaceComposer.cpp - setTargetActivityName");
+		remote()->transact(BnSurfaceComposer::SET_TARGET_ACTIVITY_NAME,data,&reply);
+		
+		return reply.readInt32();
+	}
 };
 
 IMPLEMENT_META_INTERFACE(SurfaceComposer, "android.ui.ISurfaceComposer");
@@ -346,6 +358,15 @@ status_t BnSurfaceComposer::onTransact(
             reply->writeInt32(result);
             return NO_ERROR;
         }
+        case SET_TARGET_ACTIVITY_NAME:
+        {
+			CHECK_INTERFACE(ISurfaceComposer, data, reply);
+			Parcel data;
+			String8 name = data.readString8();
+			status_t result = setTargetActivityName(name);
+			reply->writeInt32(result);
+			return NO_ERROR;
+		}
         default: {
             return BBinder::onTransact(code, data, reply, flags);
         }

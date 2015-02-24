@@ -1705,7 +1705,7 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
     HWComposer& hwc(getHwComposer());
     HWComposer::LayerListIterator cur = hwc.begin(id);
     const HWComposer::LayerListIterator end = hwc.end(id);
-
+	//ALOGI("doComposeSurfaces");
     bool hasGlesComposition = hwc.hasGlesComposition(id);
     if (hasGlesComposition) {
         if (!hw->makeCurrent(mEGLDisplay, mEGLContext)) {
@@ -1775,6 +1775,7 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         // we're using h/w composer
         for (size_t i=0 ; i<count && cur!=end ; ++i, ++cur) {
             const sp<Layer>& layer(layers[i]);
+            //ALOGI("Layer %d name %s",i,layer->getName().string());
             const Region clip(dirty.intersect(tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
                 switch (cur->getCompositionType()) {
@@ -1805,6 +1806,7 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             layer->setAcquireFence(hw, *cur);
         }
     } else {
+		return;
         // we're not using h/w composer
         for (size_t i=0 ; i<count ; ++i) {
             const sp<Layer>& layer(layers[i]);
@@ -2055,7 +2057,7 @@ status_t SurfaceFlinger::createLayer(
         uint32_t w, uint32_t h, PixelFormat format, uint32_t flags,
         sp<IBinder>* handle, sp<IGraphicBufferProducer>* gbp)
 {
-    //ALOGD("createLayer for (%d x %d), name=%s", w, h, name.string());
+    ALOGD("createLayer for (%d x %d), name=%s", w, h, name.string());
     if (int32_t(w|h) < 0) {
         ALOGE("createLayer() failed, w or h is negative (w=%d, h=%d)",
                 int(w), int(h));
@@ -2621,6 +2623,14 @@ bool SurfaceFlinger::startDdmConnection()
     return true;
 }
 
+//sbh
+status_t SurfaceFlinger::setTargetActivityName(const char* activityName)
+{
+	mTargetActivityName = String8(activityName);
+	
+	return NO_ERROR;
+}
+
 status_t SurfaceFlinger::onTransact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
 {
@@ -2658,6 +2668,17 @@ status_t SurfaceFlinger::onTransact(
             }
             break;
         }
+        //sbh
+        case SET_TARGET_ACTIVITY_NAME:
+        {
+			CHECK_INTERFACE(IDudiLowManagerService,data,reply);
+			const char* name = data.readCString();
+			ALOGI("SurfaceFlinger.cpp - name : %s",name);
+			setTargetActivityName(name);
+			ALOGI("TargetActivityName is set : %s",mTargetActivityName.string());
+			reply->writeInt32(NO_ERROR);
+			//return NO_ERROR;
+		}
     }
 
     status_t err = BnSurfaceComposer::onTransact(code, data, reply, flags);

@@ -145,7 +145,7 @@ public:
             const Rect& layerStackRect,
             const Rect& displayRect);
 
-private:
+public:
     virtual void onFirstRef();
     Composer& getComposer();
 
