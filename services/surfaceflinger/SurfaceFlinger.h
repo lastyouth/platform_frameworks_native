@@ -403,6 +403,8 @@ private:
             uint32_t minLayerZ, uint32_t maxLayerZ);
 
     void logFrameStats();
+    // check if name is target
+    bool checkNameisTarget(String8 name,int type) const;
 
     /* ------------------------------------------------------------------------
      * Attributes

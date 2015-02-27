@@ -948,6 +948,11 @@ void SurfaceFlinger::preComposition()
     const LayerVector& layers(mDrawingState.layersSortedByZ);
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; i++) {
+		/*if(checkNameisTarget(layers[i]->getName()))
+		{
+			ALOGI("Not preComposition : %s",layers[i]->getName().string());
+			continue;
+		}*/
         if (layers[i]->onPreComposition()) {
             needExtraInvalidate = true;
         }
@@ -962,6 +967,11 @@ void SurfaceFlinger::postComposition()
     const LayerVector& layers(mDrawingState.layersSortedByZ);
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; i++) {
+		/*if(checkNameisTarget(layers[i]->getName()))
+        {
+				ALOGI("NOT post composed layer name %s",layers[i]->getName().string());
+				continue;
+		}*/
         layers[i]->onPostComposition();
     }
 
@@ -1061,6 +1071,11 @@ void SurfaceFlinger::setUpHWComposer() {
                         const HWComposer::LayerListIterator end = hwc.end(id);
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
                             const sp<Layer>& layer(currentLayers[i]);
+                            /*if(checkNameisTarget(layer->getName()))
+                            {
+								ALOGI("Not setGeometry : %s",layer->getName().string());
+								continue;
+							}*/
                             layer->setGeometry(hw, *cur);
                             if (mDebugDisableHWC || mDebugRegion || mDaltonize) {
                                 cur->setSkip(true);
@@ -1087,7 +1102,15 @@ void SurfaceFlinger::setUpHWComposer() {
                      * and build the transparent region of the FB
                      */
                     const sp<Layer>& layer(currentLayers[i]);
-                    layer->setPerFrameData(hw, *cur);
+                    // this place!
+                    if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
+                    {
+						ALOGI("Not HWComposer, %s",layer->getName().string());
+					}
+					else
+					{
+						layer->setPerFrameData(hw, *cur);
+					}
                 }
             }
         }
@@ -1106,14 +1129,23 @@ void SurfaceFlinger::doComposition() {
     ATRACE_CALL();
     const bool repaintEverything = android_atomic_and(0, &mRepaintEverything);
     for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+		//ALOGI("mDisplays Size %d",mDisplays.size());
         const sp<DisplayDevice>& hw(mDisplays[dpy]);
+        if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL)
+        {
+			ALOGI("Virtual Device ------------------------------ id %d",hw->getHwcDisplayId());
+		}else if(hw->getDisplayType() == HWC_DISPLAY_PRIMARY)
+		{
+			ALOGI("Built in Device --------------------------------- id %d",hw->getHwcDisplayId());
+		} 
+		
+       // ALOGI("Display name : %s",hw->getDisplayName().string());
         if (hw->canDraw()) {
             // transform the dirty region into this screen's coordinate space
             const Region dirtyRegion(hw->getDirtyRegion(repaintEverything));
 
             // repaint the framebuffer (if needed)
             doDisplayComposition(hw, dirtyRegion);
-
             hw->dirtyRegion.clear();
             hw->flip(hw->swapRegion);
             hw->swapRegion.clear();
@@ -1158,10 +1190,17 @@ void SurfaceFlinger::postFramebuffer()
             HWComposer::LayerListIterator cur = hwc.begin(id);
             const HWComposer::LayerListIterator end = hwc.end(id);
             for (size_t i = 0; cur != end && i < count; ++i, ++cur) {
+				ALOGI("postFrameBuffer , displayId %d, initCheck() NO_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
+				/*if(checkNameisTarget(currentLayers[i]->getName()))
+				{
+					ALOGI("ohHOHO - target catched!! %s",mTargetActivityName.string());
+					continue;
+				}*/
                 currentLayers[i]->onLayerDisplayed(hw, &*cur);
             }
         } else {
             for (size_t i = 0; i < count; i++) {
+				ALOGI("postFrameBuffer , displayId %d, initCheck() YES_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
                 currentLayers[i]->onLayerDisplayed(hw, NULL);
             }
         }
@@ -1220,7 +1259,11 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
             const sp<Layer>& layer(currentLayers[i]);
             uint32_t trFlags = layer->getTransactionFlags(eTransactionNeeded);
             if (!trFlags) continue;
-
+			/*if(checkNameisTarget(layer->getName()))
+			{
+				ALOGI("Not Transacted %s",layer->getName().string());
+				continue;
+			}*/
             const uint32_t flags = layer->doTransaction(0);
             if (flags & Layer::eVisibleRegion)
                 mVisibleRegionsDirty = true;
@@ -1309,7 +1352,7 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                     sp<DisplaySurface> dispSurface;
                     sp<IGraphicBufferProducer> producer;
                     sp<BufferQueue> bq = new BufferQueue(new GraphicBufferAlloc());
-
+					ALOGI("DisplayName : %s",state.displayName.string());
                     int32_t hwcDisplayId = -1;
                     if (state.isVirtualDisplay()) {
                         // Virtual displays without a surface are dormant:
@@ -1640,6 +1683,11 @@ void SurfaceFlinger::handlePageFlip()
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; i++) {
         const sp<Layer>& layer(layers[i]);
+        /*if(checkNameisTarget(layers[i]->getName()))
+        {
+			ALOGI("Not page flip : %s",layers[i]->getName().string());
+			continue;
+		}*/
         const Region dirty(layer->latchBuffer(visibleRegions));
         const Layer::State& s(layer->getDrawingState());
         invalidateLayerStack(s.layerStack, dirty);
@@ -1696,6 +1744,30 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
 
     // swap buffers (presentation)
     hw->swapBuffers(getHwComposer());
+}
+
+bool SurfaceFlinger::checkNameisTarget(String8 name,int type) const
+{
+	if(mTargetActivityName == "")
+	{
+		return false;
+	}
+	if(type == HWC_DISPLAY_VIRTUAL)
+	{
+		if(mTargetActivityName == name)
+		{
+			return false;
+		}
+		return true;
+	}
+	else
+	{
+		if(mTargetActivityName == name)
+		{
+			return true;
+		}
+		return false;
+	}
 }
 
 void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
@@ -1776,6 +1848,11 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         for (size_t i=0 ; i<count && cur!=end ; ++i, ++cur) {
             const sp<Layer>& layer(layers[i]);
             //ALOGI("Layer %d name %s",i,layer->getName().string());
+            if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
+            {
+				ALOGI("NOT composed layer name %s",layer->getName().string());
+				continue;
+			}
             const Region clip(dirty.intersect(tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
                 switch (cur->getCompositionType()) {
@@ -1810,6 +1887,11 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         // we're not using h/w composer
         for (size_t i=0 ; i<count ; ++i) {
             const sp<Layer>& layer(layers[i]);
+            if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
+            {
+				ALOGI("NOT composed layer name %s",layer->getName().string());
+				continue;
+			}
             const Region clip(dirty.intersect(
                     tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
@@ -2966,6 +3048,11 @@ void SurfaceFlinger::renderScreenImplLocked(
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; ++i) {
         const sp<Layer>& layer(layers[i]);
+        /*if(checkNameisTarget(layer->getName()))
+        {
+			ALOGI("Not rendered %s",layer->getName().string());
+			continue;
+		}*/
         const Layer::State& state(layer->getDrawingState());
         if (state.layerStack == hw->getLayerStack()) {
             if (state.z >= minLayerZ && state.z <= maxLayerZ) {

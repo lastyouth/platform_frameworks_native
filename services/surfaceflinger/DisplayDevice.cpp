@@ -135,6 +135,7 @@ DisplayDevice::~DisplayDevice() {
     }
 }
 
+
 void DisplayDevice::disconnect(HWComposer& hwc) {
     if (mHwcDisplayId >= 0) {
         hwc.disconnectDisplay(mHwcDisplayId);
