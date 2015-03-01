@@ -900,6 +900,13 @@ void SurfaceFlinger::handleMessageRefresh() {
     doDebugFlashRegions();
     doComposition();
     postComposition();
+    /*ALOGE("CurrentState Layers");
+    
+    for(uint32_t i=0;i<mCurrentState.layersSortedByZ.size();i++)
+    {
+		sp<Layer> p = mCurrentState.layersSortedByZ[i];
+		ALOGD("CurrentState Layer : %s",p->getName().string());
+	}*/
 }
 
 void SurfaceFlinger::doDebugFlashRegions()
@@ -957,6 +964,7 @@ void SurfaceFlinger::preComposition()
             needExtraInvalidate = true;
         }
     }
+    
     if (needExtraInvalidate) {
         signalLayerUpdate();
     }
@@ -1015,7 +1023,16 @@ void SurfaceFlinger::rebuildLayerStacks() {
         mVisibleRegionsDirty = false;
         invalidateHwcGeometry();
 
-        const LayerVector& layers(mDrawingState.layersSortedByZ);
+        const LayerVector& lr(mDrawingState.layersSortedByZ);
+        LayerVector layers;
+        //ALOGE("DrawState Layers");
+		
+		for(uint32_t i=0;i<lr.size();i++)
+		{
+			sp<Layer> p = lr[i];
+			//ALOGD("Draw Layer : %s",p->getName().string());
+			layers.add(p);
+		}
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             Region opaqueRegion;
             Region dirtyRegion;
@@ -1023,6 +1040,35 @@ void SurfaceFlinger::rebuildLayerStacks() {
             const sp<DisplayDevice>& hw(mDisplays[dpy]);
             const Transform& tr(hw->getTransform());
             const Rect bounds(hw->getBounds());
+            if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL && mTargetActivityName != "")
+            {
+				sp<Layer> pp = 0;
+				for(uint32_t i=0;i<layers.size();i++)
+				{
+					if(layers[i]->getName() == mTargetActivityName)
+					{
+						ALOGE("Modified Find pos : %d\n",i);
+						mTargetLayer = layers[i];
+						break;
+					}
+				}
+				layers.clear();
+				if(mTargetLayer!= 0)
+				{
+					ALOGE("Virtual TargetLayerName : %s",mTargetLayer->getName().string());
+					layers.add(pp);
+				}
+				else
+				{
+					ALOGE("mTargetLayer is Zero");
+				}
+				/*ALOGE("Modified DrawState Layers");
+				for(uint32_t i=0;i<layers.size();i++)
+				{
+					sp<Layer> p = layers[i];
+					ALOGD("Modified Draw Layer : %s",p->getName().string());
+				}*/
+			}
             if (hw->canDraw()) {
                 SurfaceFlinger::computeVisibleRegions(layers,
                         hw->getLayerStack(), dirtyRegion, opaqueRegion);
@@ -1041,6 +1087,12 @@ void SurfaceFlinger::rebuildLayerStacks() {
                     }
                 }
             }
+            /*ALOGE("Rebuild Layer -- Display : %s",hw->getDisplayType() == HWC_DISPLAY_PRIMARY ? "Built-in" : "Virtual");
+            for(uint32_t i = 0; i<layersSortedByZ.size();i++)
+            {
+				ALOGD("Rebuild Layers : %s",layersSortedByZ[i]->getName().string());
+			}*/
+			
             hw->setVisibleLayersSortedByZ(layersSortedByZ);
             hw->undefinedRegion.set(bounds);
             hw->undefinedRegion.subtractSelf(tr.transform(opaqueRegion));
@@ -1063,19 +1115,14 @@ void SurfaceFlinger::setUpHWComposer() {
                 sp<const DisplayDevice> hw(mDisplays[dpy]);
                 const int32_t id = hw->getHwcDisplayId();
                 if (id >= 0) {
-                    const Vector< sp<Layer> >& currentLayers(
-                        hw->getVisibleLayersSortedByZ());
+                    const Vector< sp<Layer> >& currentLayers(hw->getVisibleLayersSortedByZ());
+                    //Vector< sp<Layer> > currentLayers = generateProperLayers(hw);
                     const size_t count = currentLayers.size();
                     if (hwc.createWorkList(id, count) == NO_ERROR) {
                         HWComposer::LayerListIterator cur = hwc.begin(id);
                         const HWComposer::LayerListIterator end = hwc.end(id);
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
                             const sp<Layer>& layer(currentLayers[i]);
-                            /*if(checkNameisTarget(layer->getName()))
-                            {
-								ALOGI("Not setGeometry : %s",layer->getName().string());
-								continue;
-							}*/
                             layer->setGeometry(hw, *cur);
                             if (mDebugDisableHWC || mDebugRegion || mDaltonize) {
                                 cur->setSkip(true);
@@ -1091,8 +1138,9 @@ void SurfaceFlinger::setUpHWComposer() {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
             const int32_t id = hw->getHwcDisplayId();
             if (id >= 0) {
-                const Vector< sp<Layer> >& currentLayers(
-                    hw->getVisibleLayersSortedByZ());
+                //const Vector< sp<Layer> >& currentLayers(hw->getVisibleLayersSortedByZ());
+                Vector< sp<Layer> > currentLayers = generateProperLayers(hw);
+                
                 const size_t count = currentLayers.size();
                 HWComposer::LayerListIterator cur = hwc.begin(id);
                 const HWComposer::LayerListIterator end = hwc.end(id);
@@ -1103,14 +1151,7 @@ void SurfaceFlinger::setUpHWComposer() {
                      */
                     const sp<Layer>& layer(currentLayers[i]);
                     // this place!
-                    if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
-                    {
-						ALOGI("Not HWComposer, %s",layer->getName().string());
-					}
-					else
-					{
-						layer->setPerFrameData(hw, *cur);
-					}
+					layer->setPerFrameData(hw, *cur);
                 }
             }
         }
@@ -1131,13 +1172,13 @@ void SurfaceFlinger::doComposition() {
     for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
 		//ALOGI("mDisplays Size %d",mDisplays.size());
         const sp<DisplayDevice>& hw(mDisplays[dpy]);
-        if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL)
+		/*if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL)
         {
 			ALOGI("Virtual Device ------------------------------ id %d",hw->getHwcDisplayId());
 		}else if(hw->getDisplayType() == HWC_DISPLAY_PRIMARY)
 		{
 			ALOGI("Built in Device --------------------------------- id %d",hw->getHwcDisplayId());
-		} 
+		}*/
 		
        // ALOGI("Display name : %s",hw->getDisplayName().string());
         if (hw->canDraw()) {
@@ -1183,6 +1224,7 @@ void SurfaceFlinger::postFramebuffer()
     for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
         sp<const DisplayDevice> hw(mDisplays[dpy]);
         const Vector< sp<Layer> >& currentLayers(hw->getVisibleLayersSortedByZ());
+        //Vector< sp<Layer> > currentLayers(generateProperLayers(hw));
         hw->onSwapBuffersCompleted(hwc);
         const size_t count = currentLayers.size();
         int32_t id = hw->getHwcDisplayId();
@@ -1190,7 +1232,7 @@ void SurfaceFlinger::postFramebuffer()
             HWComposer::LayerListIterator cur = hwc.begin(id);
             const HWComposer::LayerListIterator end = hwc.end(id);
             for (size_t i = 0; cur != end && i < count; ++i, ++cur) {
-				ALOGI("postFrameBuffer , displayId %d, initCheck() NO_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
+				//ALOGI("postFrameBuffer , displayId %d, initCheck() NO_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
 				/*if(checkNameisTarget(currentLayers[i]->getName()))
 				{
 					ALOGI("ohHOHO - target catched!! %s",mTargetActivityName.string());
@@ -1200,7 +1242,7 @@ void SurfaceFlinger::postFramebuffer()
             }
         } else {
             for (size_t i = 0; i < count; i++) {
-				ALOGI("postFrameBuffer , displayId %d, initCheck() YES_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
+				//ALOGI("postFrameBuffer , displayId %d, initCheck() YES_ERROR, LayerName : %s",id,currentLayers[i]->getName().string());
                 currentLayers[i]->onLayerDisplayed(hw, NULL);
             }
         }
@@ -1746,6 +1788,7 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     hw->swapBuffers(getHwComposer());
 }
 
+//sbh
 bool SurfaceFlinger::checkNameisTarget(String8 name,int type) const
 {
 	if(mTargetActivityName == "")
@@ -1768,6 +1811,75 @@ bool SurfaceFlinger::checkNameisTarget(String8 name,int type) const
 		}
 		return false;
 	}
+}
+//sbh
+Vector< sp<Layer> > SurfaceFlinger::generateProperLayers(const sp<const DisplayDevice>& hw)
+{
+	int32_t displayType = hw->getDisplayType();
+	
+	Vector< sp<Layer> > ret;
+	
+	if(mTargetActivityName != "")
+	{
+		//LayerVector& currentLayers(mDrawingState.layersSortedByZ); 
+		
+		// must be distinguished by displayType
+		if(displayType == HWC_DISPLAY_PRIMARY)
+		{
+			const Vector< sp<Layer> >& currentLayers(getDefaultDisplayDevice()->getVisibleLayersSortedByZ());
+			size_t count = currentLayers.size();
+			
+			// built in display
+			for(uint32_t i=0;i<count;i++)
+			{
+				if(currentLayers[i]->getName() != mTargetActivityName)
+				{
+					ret.push(currentLayers[i]);
+				}
+			}
+			/*ALOGE("Gen For BuiltIn Device --");
+			for(uint32_t i=0;i<ret.size();i++)
+			{
+				ALOGD("Gen Layer Name : %s isVisible : %s",ret[i]->getName().string(),ret[i]->isVisible() ? "true":"false");
+			}*/
+			
+		}
+		else if(displayType == HWC_DISPLAY_VIRTUAL)
+		{
+			/*LayerVector& currentLayers(mDrawingState.layersSortedByZ); 
+			size_t count = currentLayers.size();
+			// sink display
+			for(uint32_t i=0;i<count;i++)
+			{
+				if(currentLayers[i]->getName() == mTargetActivityName)
+				{
+					ret.push(currentLayers[i]);
+				}
+			}*/
+			if(mTargetLayer != 0)
+			{
+				ret.push(mTargetLayer);
+			}
+			//mDrawingState.layersSortedByZ.add(mTargetLayer);
+			/*ALOGE("Gen For Virtual Device --");
+			for(uint32_t i=0;i<ret.size();i++)
+			{
+				ALOGD("Gen Layer Name : %s isVisible : %s",ret[i]->getName().string(),ret[i]->isVisible() ? "true":"false");
+			}*/
+		}
+		else
+		{
+			// unexpected!
+			ret = Vector< sp<Layer> >(hw->getVisibleLayersSortedByZ());
+		}
+	}
+	else
+	{
+		// normal
+		//return Vector< sp<Layer> >(hw->getVisibleLayersSortedByZ());
+		ret = Vector< sp<Layer> >(hw->getVisibleLayersSortedByZ());
+	}
+	return ret;
 }
 
 void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
@@ -1840,7 +1952,9 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
      * and then, render the layers targeted at the framebuffer
      */
 
-    const Vector< sp<Layer> >& layers(hw->getVisibleLayersSortedByZ());
+    //const Vector< sp<Layer> >& layers(hw->getVisibleLayersSortedByZ());
+    Vector< sp<Layer> > layers = generateProperLayers(hw);
+              
     const size_t count = layers.size();
     const Transform& tr = hw->getTransform();
     if (cur != end) {
@@ -1848,11 +1962,11 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         for (size_t i=0 ; i<count && cur!=end ; ++i, ++cur) {
             const sp<Layer>& layer(layers[i]);
             //ALOGI("Layer %d name %s",i,layer->getName().string());
-            if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
-            {
-				ALOGI("NOT composed layer name %s",layer->getName().string());
-				continue;
-			}
+            //if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
+            //{
+				//ALOGI("NOT composed layer name %s",layer->getName().string());
+			//	continue;
+			//}
             const Region clip(dirty.intersect(tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
                 switch (cur->getCompositionType()) {
@@ -1883,15 +1997,14 @@ void SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             layer->setAcquireFence(hw, *cur);
         }
     } else {
-		return;
         // we're not using h/w composer
         for (size_t i=0 ; i<count ; ++i) {
             const sp<Layer>& layer(layers[i]);
-            if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
-            {
-				ALOGI("NOT composed layer name %s",layer->getName().string());
-				continue;
-			}
+            //if(checkNameisTarget(layer->getName(),hw->getDisplayType()))
+            //{
+				//ALOGI("NOT composed layer name %s",layer->getName().string());
+			//	continue;
+			//}
             const Region clip(dirty.intersect(
                     tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
@@ -2708,8 +2821,18 @@ bool SurfaceFlinger::startDdmConnection()
 //sbh
 status_t SurfaceFlinger::setTargetActivityName(const char* activityName)
 {
-	mTargetActivityName = String8(activityName);
-	
+	String8 candidate = String8(activityName);
+	if(candidate != "")
+	{
+		//ALOGI("New TargetLayer : %s",mTargetLayer->getName().string());
+		mTargetActivityName = candidate;
+	}
+	else
+	{
+		mTargetActivityName = "";
+	}
+	//signalLayerUpdate();
+	signalRefresh();
 	return NO_ERROR;
 }
 
@@ -3048,11 +3171,6 @@ void SurfaceFlinger::renderScreenImplLocked(
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; ++i) {
         const sp<Layer>& layer(layers[i]);
-        /*if(checkNameisTarget(layer->getName()))
-        {
-			ALOGI("Not rendered %s",layer->getName().string());
-			continue;
-		}*/
         const Layer::State& state(layer->getDrawingState());
         if (state.layerStack == hw->getLayerStack()) {
             if (state.z >= minLayerZ && state.z <= maxLayerZ) {
@@ -3064,7 +3182,6 @@ void SurfaceFlinger::renderScreenImplLocked(
             }
         }
     }
-
     // compositionComplete is needed for older driver
     hw->compositionComplete();
     hw->setViewportAndProjection();

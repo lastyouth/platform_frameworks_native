@@ -208,8 +208,7 @@ private:
     // called when screen is turning back on
     virtual void unblank(const sp<IBinder>& display);
     virtual status_t getDisplayInfo(const sp<IBinder>& display, DisplayInfo* info);
-    //sbh
-    virtual status_t setTargetActivityName(const char* name);
+
 
     /* ------------------------------------------------------------------------
      * DeathRecipient interface
@@ -403,8 +402,7 @@ private:
             uint32_t minLayerZ, uint32_t maxLayerZ);
 
     void logFrameStats();
-    // check if name is target
-    bool checkNameisTarget(String8 name,int type) const;
+
 
     /* ------------------------------------------------------------------------
      * Attributes
@@ -476,15 +474,29 @@ private:
     bool mPrimaryHWVsyncEnabled;
     bool mHWVsyncAvailable;
 
-	//sbh
-	// target activity name for Layer distinguish
-	String8 mTargetActivityName;
+
     /* ------------------------------------------------------------------------
      * Feature prototyping
      */
 
     Daltonizer mDaltonizer;
     bool mDaltonize;
+    
+    //sbh modified
+public:
+    //sbh
+    virtual status_t setTargetActivityName(const char* name);
+private:
+	//sbh
+	// target activity name for Layer distinguish
+	String8 mTargetActivityName;
+	sp<Layer> mTargetLayer;
+	// layer for virtual and primilary built in.
+	//Vector< sp<Layer> > mBuiltInLayers; abort!!!
+	//Vector< sp<Layer> > mVirtualLayers;
+	// check if name is target
+    bool checkNameisTarget(String8 name,int type) const;
+    Vector< sp<Layer> > generateProperLayers(const sp<const DisplayDevice>& hw);
 };
 
 }; // namespace android
