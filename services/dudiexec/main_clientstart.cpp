@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 	
 	sDudiService = interface_cast<IDudiLowManagerService>(b);
 	
-	sDudiService->print("Hello World Service!!\n");
+	sDudiService->postEncodedInputEventInternal(String8("Don't be shy!!!"));
 	
 	return 0;
 }

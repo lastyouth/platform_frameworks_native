@@ -14,7 +14,11 @@
 #define LOG_TAG "DudiLowManagerService"
 
 namespace android{
-
+	enum{
+		HW_DUDILOWMANAGERSERVICE = IBinder::FIRST_CALL_TRANSACTION,
+		DUDIPOSTINPUTEVENT = 0x10001,
+		DUDIGETINPUTEVENT = 0x10002,
+	};
 	void DudiLowManagerService::instantiate()
 	{
 		ALOGI("DudiLowManagerService is instantiated");
@@ -29,7 +33,27 @@ namespace android{
 		printf("%s\n",str);
 		return NO_ERROR;
 	}
-
+	String8 DudiLowManagerService::getEncodedInputEventInternal()
+	{
+		String8 ret;
+		
+		if(!mInputEvents.empty())
+		{
+			ret = mInputEvents.top();
+			mInputEvents.pop();
+		}
+		else
+		{
+			ret = String8("null");
+		}
+		return ret;
+	}
+	status_t DudiLowManagerService::postEncodedInputEventInternal(String8 target)
+	{
+		mInputEvents.push_front(target);
+		
+		return NO_ERROR;
+	}
 	DudiLowManagerService::DudiLowManagerService()
 	{
 		ALOGI("DudiLowManagerService is Created");
@@ -50,6 +74,33 @@ namespace android{
 				const char* str;
 				str = data.readCString();
 				reply->writeInt32(print(str));
+				return NO_ERROR;
+			}
+			break;
+		case DUDIGETINPUTEVENT:
+			{
+				CHECK_INTERFACE(IDudiLowManagerService,data,reply);
+				const char* str;
+				
+				str = getEncodedInputEventInternal().string();
+				
+				reply->writeCString(str);
+				
+				return NO_ERROR;
+			}
+			break;
+		case DUDIPOSTINPUTEVENT:
+			{
+				CHECK_INTERFACE(IDudiLowManagerService,data,reply);
+				const char* str;
+				str = data.readCString();
+				
+				String8 inputEvent = String8(str);
+				
+				status_t ret = postEncodedInputEventInternal(inputEvent);
+				
+				reply->writeInt32(ret);
+				
 				return NO_ERROR;
 			}
 			break;

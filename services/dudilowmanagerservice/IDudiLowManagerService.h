@@ -2,6 +2,8 @@
 #include <binder/IInterface.h>
 #include <binder/Parcel.h>
 #include <utils/Log.h>
+#include <utils/String8.h>
+#include <utils/String16.h>
 
 #define LOG_TAG "DudiLowManagerService"
 
@@ -14,6 +16,8 @@ namespace android{
 		DECLARE_META_INTERFACE(DudiLowManagerService);
 
 		virtual status_t print(const char *str)=0;
+		virtual String8 getEncodedInputEventInternal() = 0;
+		virtual status_t postEncodedInputEventInternal(String8 target) = 0;
 	};
 	
 	/*class BpDudiLowManagerService : public BpInterface<IDudiLowManagerService>

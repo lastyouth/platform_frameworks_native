@@ -1068,6 +1068,16 @@ void SurfaceFlinger::rebuildLayerStacks() {
 					sp<Layer> p = layers[i];
 					ALOGD("Modified Draw Layer : %s",p->getName().string());
 				}*/
+			}else if(hw->getDisplayType() == HWC_DISPLAY_PRIMARY && mTargetActivityName != "")
+			{
+				for(uint32_t i=0;i<layers.size();i++)
+				{
+					if(layers[i]->getName() == mTargetActivityName)
+					{
+						layers.removeAt(i);
+						break;
+					}
+				}
 			}
             if (hw->canDraw()) {
                 SurfaceFlinger::computeVisibleRegions(layers,
