@@ -1030,7 +1030,14 @@ void SurfaceFlinger::rebuildLayerStacks() {
 		for(uint32_t i=0;i<lr.size();i++)
 		{
 			sp<Layer> p = lr[i];
-			//ALOGD("Draw Layer : %s",p->getName().string());
+			ALOGD("Draw Layer : %s",p->getName().string());
+			if(mTargetActivityName != "")
+			{
+				if(p->getName() == mTargetActivityName)
+				{
+					mTargetLayer = p;
+				}
+			}
 			layers.add(p);
 		}
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
@@ -1040,9 +1047,19 @@ void SurfaceFlinger::rebuildLayerStacks() {
             const sp<DisplayDevice>& hw(mDisplays[dpy]);
             const Transform& tr(hw->getTransform());
             const Rect bounds(hw->getBounds());
-            if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL && mTargetActivityName != "")
+            if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL)
             {
-				sp<Layer> pp = 0;
+				for(uint32_t i=0;i<layers.size();i++)
+				{
+					if(layers[i]->getName() == String8("NavigationBar"))
+					{
+						layers.removeAt(i);
+						break;
+					}
+				}
+			}
+            if(hw->getDisplayType() == HWC_DISPLAY_VIRTUAL && mTargetActivityName != "")
+			{
 				for(uint32_t i=0;i<layers.size();i++)
 				{
 					if(layers[i]->getName() == mTargetActivityName)
@@ -1056,7 +1073,7 @@ void SurfaceFlinger::rebuildLayerStacks() {
 				if(mTargetLayer!= 0)
 				{
 					ALOGE("Virtual TargetLayerName : %s",mTargetLayer->getName().string());
-					layers.add(pp);
+					layers.add(mTargetLayer);
 				}
 				else
 				{
@@ -1068,7 +1085,7 @@ void SurfaceFlinger::rebuildLayerStacks() {
 					sp<Layer> p = layers[i];
 					ALOGD("Modified Draw Layer : %s",p->getName().string());
 				}*/
-			}else if(hw->getDisplayType() == HWC_DISPLAY_PRIMARY && mTargetActivityName != "")
+			}/*else if(hw->getDisplayType() == HWC_DISPLAY_PRIMARY && mTargetActivityName != "")
 			{
 				for(uint32_t i=0;i<layers.size();i++)
 				{
@@ -1078,7 +1095,7 @@ void SurfaceFlinger::rebuildLayerStacks() {
 						break;
 					}
 				}
-			}
+			}*/
             if (hw->canDraw()) {
                 SurfaceFlinger::computeVisibleRegions(layers,
                         hw->getLayerStack(), dirtyRegion, opaqueRegion);
@@ -1829,7 +1846,7 @@ Vector< sp<Layer> > SurfaceFlinger::generateProperLayers(const sp<const DisplayD
 	
 	Vector< sp<Layer> > ret;
 	
-	if(mTargetActivityName != "")
+	if(mTargetActivityName != "" && mTargetLayer != 0)
 	{
 		//LayerVector& currentLayers(mDrawingState.layersSortedByZ); 
 		
